@@ -58,7 +58,8 @@
 
         const bgm = new Audio("Against_The_Swarm.mp3");
         bgm.loop = true; // 音楽をループ再生させる
-
+        bgm.preload = "auto"; // 先読みを指示
+        
         let frame = 0;
         let score = 0;
         let gameOver = false;
@@ -83,11 +84,13 @@
         window.addEventListener("touchstart", (e) => {
             if (!gameStarted) {
                 gameStarted = true;
+                bgm.play().catch(err => console.log("再生失敗: ", err));
                 resetGame();
                 loop();
                 return;
             }
             if (gameOver) {
+                bgm.play().catch(err => console.log("再生失敗: ", err));
                 resetGame();
                 loop();
                 return;
