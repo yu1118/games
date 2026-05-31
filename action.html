@@ -66,6 +66,9 @@
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
+        const bgm = new Audio("Chasing_the_Last_Second.mp3");
+        bgm.loop = true; // 音楽をループ再生させる
+        
         // ゲームの基本設定
         let frame = 0;
         let score = 0;
@@ -103,6 +106,9 @@
             if (!gameStarted) {
                 gameStarted = true;
                 gameOver = false;
+
+                bgm.play();
+                
                 resetGame();
                 loop();
                 return;
