@@ -27,7 +27,6 @@
             font-family: 'Courier New', Courier, monospace;
         }
 
-        /* ゲーム機の画面のフチ */
         #game-container {
             background-color: var(--color-4);
             border: 10px solid #555;
@@ -58,14 +57,13 @@
     </div>
     
     <div class="instructions">
-        画面をタップしてジャンプ！<br>障害物を避けてハイスコアを目指そう
+        タップ（長押しで大ジャンプ）<br>空中でタップで2段ジャンプ！
     </div>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
-        // BGM設定（ファイルがない場合はエラーを無視して進行します）
         let bgm;
         try {
             bgm = new Audio("Chasing_the_Last_Second.mp3");
@@ -74,50 +72,56 @@
             console.log("BGM not found");
         }
         
-        // ゲームの基本設定
         let frame = 0;
         let score = 0;
         let gameOver = false;
         let gameStarted = false;
 
-        // レトロカラー
         const COLOR_DARK = "#0f380f";
         const COLOR_LIGHT = "#9bbc0f";
 
-        // プレイヤー（四角いキャラクター）
+        // プレイヤー設定を拡張
         const player = {
             x: 50,
             y: 200,
             width: 20,
             height: 20,
-            dy: 0,        // Y軸の速度
-            jumpPower: -9, // ジャンプ力
+            dy: 0,
+            jumpPower: -10, // 気持ちよく飛べるように少しパワーアップ
             grounded: false,
-            // --- 追加: アニメーション用プロパティ ---
             animFrame: 0,
             animTimer: 0,
-            animSpeed: 8,  // 足をバタバタさせる速さ
-            isJumping: false
+            animSpeed: 8,
+            isJumping: false,
+            // --- 2段ジャンプ用の追加設定 ---
+            jumpCount: 0,     // 現在のジャンプ回数
+            maxJumps: 2       // 最大ジャンプ回数
         };
 
         const gravity = 0.5;
-        const groundY = 320; // 地面の高さ
+        const groundY = 320;
 
         let obstacles = [];
-        let particles = []; // --- 追加: 土煙エフェクト用の配列 ---
+        let particles = [];
 
-        // タップ（またはキーボードのスペース）でジャンプ
-        window.addEventListener("touchstart", handleInput);
+        // --- タップ開始（押したとき）のイベント ---
+        window.addEventListener("touchstart", handleInputPress);
         window.addEventListener("keydown", (e) => {
-            if (e.code === "Space") handleInput();
+            if (e.code === "Space") handleInputPress();
         });
 
-        function handleInput() {
+        // --- タップ終了（離したとき）のイベントを追加 ---
+        window.addEventListener("touchend", handleInputRelease);
+        window.addEventListener("keyup", (e) => {
+            if (e.code === "Space") handleInputRelease();
+        });
+
+        // 押したときの処理
+        function handleInputPress() {
             if (!gameStarted) {
                 gameStarted = true;
                 gameOver = false;
                 if(bgm) bgm.play().catch(e => console.log("Audio play prevented"));
-                
                 resetGame();
                 loop();
                 return;
@@ -128,21 +132,31 @@
                 return;
             }
 
-            // 地面にいる時だけジャンプできる
-            if (player.grounded) {
-                player.dy = player.jumpPower;
+            // 地面にいる、またはジャンプ回数が上限に達していないならジャンプ
+            if (player.grounded || player.jumpCount < player.maxJumps) {
+                player.dy = player.jumpPower; // 上に向かって力を加える
                 player.grounded = false;
+                player.jumpCount++;           // ジャンプ回数を1増やす
                 
-                // --- 追加: ジャンプ時に土煙（パーティクル）を生成 ---
+                // 土煙エフェクト
                 for (let i = 0; i < 5; i++) {
                     particles.push({
                         x: player.x + player.width / 2 + (Math.random() * 10 - 5),
                         y: player.y + player.height,
-                        vx: Math.random() * 2 - 1, // 左右に散る速度
-                        vy: Math.random() * -2 - 1, // 上に舞い上がる速度
-                        life: 15 // パーティクルが消えるまでの時間
+                        vx: Math.random() * 2 - 1,
+                        vy: Math.random() * -2 - 1,
+                        life: 15
                     });
                 }
+            }
+        }
+
+        // 離したときの処理（小ジャンプの制御）
+        function handleInputRelease() {
+            // もし上に向かって飛んでいる途中（dyがマイナス）に指を離したら
+            if (player.dy < 0) {
+                // 上に向かう勢いを半分以下に殺す（ブレーキをかける）
+                player.dy *= 0.4; 
             }
         }
 
@@ -151,6 +165,7 @@
             player.dy = 0;
             player.animFrame = 0;
             player.animTimer = 0;
+            player.jumpCount = 0; // ジャンプ回数もリセット
             obstacles = [];
             particles = [];
             score = 0;
@@ -162,27 +177,22 @@
             if (gameOver) return;
 
             frame++;
-            
-            // スコアを少しずつ増やす
             if (frame % 10 === 0) score++;
 
-            // プレイヤーの動き（重力）
+            // 重力の計算
             player.y += player.dy;
             player.dy += gravity;
 
-            // --- 追加: 土煙（パーティクル）の更新 ---
+            // 土煙の更新
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
                 p.x += p.vx;
                 p.y += p.vy;
                 p.life--;
-                // 寿命が尽きたら消す
-                if (p.life <= 0) {
-                    particles.splice(i, 1);
-                }
+                if (p.life <= 0) particles.splice(i, 1);
             }
 
-            // --- 追加: アニメーションの更新 ---
+            // アニメーションの更新
             if (player.grounded) {
                 player.isJumping = false;
                 player.animTimer++;
@@ -192,7 +202,7 @@
                 }
             } else {
                 player.isJumping = true;
-                player.animFrame = 0; // ジャンプ中はポーズを固定
+                player.animFrame = 0; 
             }
 
             // 地面との当たり判定
@@ -200,9 +210,10 @@
                 player.y = groundY - player.height;
                 player.dy = 0;
                 player.grounded = true;
+                player.jumpCount = 0; // 地面に着いたらジャンプ回数をリセット
             }
 
-            // 障害物の出現（ランダムなタイミングで右端から）
+            // 障害物の出現と移動
             if (frame % Math.floor(Math.random() * 60 + 60) === 0) {
                 let size = Math.random() * 20 + 15;
                 obstacles.push({
@@ -214,7 +225,6 @@
                 });
             }
 
-            // 障害物の移動と当たり判定
             for (let i = 0; i < obstacles.length; i++) {
                 let obs = obstacles[i];
                 obs.x -= obs.speed;
@@ -228,17 +238,13 @@
                     gameOver = true;
                 }
             }
-
-            // 画面外に出た障害物を消す
             obstacles = obstacles.filter(obs => obs.x + obs.width > 0);
         }
 
         function draw() {
-            // 画面を一旦リセット
             ctx.fillStyle = COLOR_LIGHT;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 地面の線を描く
             ctx.fillStyle = COLOR_DARK;
             ctx.fillRect(0, groundY, canvas.width, 2);
 
@@ -250,47 +256,41 @@
                 return;
             }
 
-            // --- 追加: 土煙（パーティクル）の描画 ---
+            // 土煙の描画
             ctx.fillStyle = COLOR_DARK;
             particles.forEach(p => {
-                // 寿命に応じてだんだん小さくする
                 let size = (p.life / 15) * 4; 
                 ctx.fillRect(p.x, p.y, size, size);
             });
 
-            // --- 変更: プレイヤーの描画（足のアニメーション） ---
+            // プレイヤーの描画
             ctx.fillStyle = COLOR_DARK;
-            // 胴体（足の分だけ少し短くする）
             ctx.fillRect(player.x, player.y, player.width, player.height - 4);
             
-            // 目
             ctx.fillStyle = COLOR_LIGHT;
             ctx.fillRect(player.x + 12, player.y + 4, 4, 4);
 
-            // 足
             ctx.fillStyle = COLOR_DARK;
             if (player.isJumping) {
-                // ジャンプ中のポーズ（足を縮める）
                 ctx.fillRect(player.x + 4, player.y + player.height - 6, 4, 4);
                 ctx.fillRect(player.x + 12, player.y + player.height - 4, 4, 4);
             } else {
-                // 走るアニメーション
                 if (player.animFrame === 0) {
-                    ctx.fillRect(player.x + 4, player.y + player.height - 4, 6, 4);  // 前足
-                    ctx.fillRect(player.x + 12, player.y + player.height - 2, 4, 2); // 後ろ足
+                    ctx.fillRect(player.x + 4, player.y + player.height - 4, 6, 4);  
+                    ctx.fillRect(player.x + 12, player.y + player.height - 2, 4, 2); 
                 } else {
-                    ctx.fillRect(player.x + 10, player.y + player.height - 4, 6, 4); // 前足
-                    ctx.fillRect(player.x + 4, player.y + player.height - 2, 4, 2);  // 後ろ足
+                    ctx.fillRect(player.x + 10, player.y + player.height - 4, 6, 4); 
+                    ctx.fillRect(player.x + 4, player.y + player.height - 2, 4, 2);  
                 }
             }
 
-            // 障害物を描く
+            // 障害物の描画
             ctx.fillStyle = COLOR_DARK;
             obstacles.forEach(obs => {
                 ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
             });
 
-            // スコアを表示
+            // スコア表示
             ctx.fillStyle = COLOR_DARK;
             ctx.font = "bold 20px Courier New";
             ctx.textAlign = "left";
@@ -314,9 +314,7 @@
             }
         }
 
-        // 最初の画面を描画しておく
         draw();
-
     </script>
 </body>
 </html>
